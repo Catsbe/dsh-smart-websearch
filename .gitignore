@@ -1,0 +1,5 @@
+node_modules/
+test/_plugin.mjs
+test/_engines.mjs
+test/node_modules/
+*.log

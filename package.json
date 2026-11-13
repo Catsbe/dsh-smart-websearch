@@ -1,0 +1,48 @@
+{
+  "name": "dsh-smart-websearch",
+  "version": "0.1.0",
+  "description": "Smart web search + fetch provider for DeepSeek Harness. Reuses the built-in web_search/web_fetch tools and makes them faster, more reliable, and less wasteful: language-aware routing (Chinese queries direct via cn.bing/Baidu, overseas via proxy), multi-engine hedged fallback, result caching, domestic-direct/overseas-proxy fetching, and search-hygiene nudges to curb redundant searches. An update-proof alternative to patching dsh-free-search.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.2 <0.4.0-0"
+  },
+  "dependencies": {
+    "undici": "^7.30.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4 || >=4.0.6-alpha.2 <5.0.0",
+    "@deepseek-ai/dsh-web": ">=0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.2 || >=3.18.6-alpha.2 <4.0.0"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "web-search",
+    "bing",
+    "baidu",
+    "duckduckgo",
+    "smart-search",
+    "search-hygiene"
+  ],
+  "license": "Apache-2.0"
+}
