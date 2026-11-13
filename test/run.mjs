@@ -13,6 +13,7 @@ globalThis.fetch = (url, opts) => handler(url, opts);
 const setHandler = (fn) => { handler = fn; };
 
 fs.copyFileSync(path.join(here, "..", "lib", "engines.js"), path.join(here, "_engines.mjs"));
+fs.copyFileSync(path.join(here, "..", "lib", "extract.js"), path.join(here, "extract.js"));
 const { searchBing, searchDdgLite, makeSearchProvider, makeFetchProvider } = await import("./_engines.mjs");
 
 const cfg = { bingMarket: "", perEngineTimeoutMs: 8000, searchBudgetMs: 12000, hedgeMs: 50, fetchTimeoutMs: 8000, fetchMaxBytes: 5000000, fetchMaxChars: 100 };

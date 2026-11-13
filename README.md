@@ -24,6 +24,7 @@ DSH 自带 `web_search` / `web_fetch` 工具，但搜索后端要自己接。直
 | 🔀 **多引擎 hedge 兜底** | Bing + 百度 + DuckDuckGo-Lite；首引擎超时即并行起下一个，谁先返回用谁，单引擎 8s / 总预算 12s。 |
 | ⚡ **结果缓存** | 同会话重复查询秒回（默认 5 分钟 TTL），不再重复联网。 |
 | 🕸 **智能抓取** | 按域名判定：国内站直连、海外站代理，任一路失败自动兜底另一路；字节/字符上限、拒绝二进制、JS 空壳页提示。 |
+| 🧩 **SPA 数据回收** | JS 空壳页自动提取内嵌 JSON（Next.js flight / `__NEXT_DATA__` / JSON-LD / Nuxt / Redux 状态），**无需浏览器、无需临时爬虫脚本**，一次抓取拿到数据；提取不到时明确提示"临时写脚本打 API 或换源"。 |
 | 🧹 **搜索卫生** | 检测到近似重复搜索时追加提醒"先用已有数据"；并注入简短系统引导，从源头减少无效搜索。只劝不拦。 |
 | 🔒 **更新免疫** | 独立插件，不改 `dsh-free-search` 源码——后者一更新补丁就丢，本插件不受影响。 |
 
@@ -34,7 +35,7 @@ DSH 自带 `web_search` / `web_fetch` 工具，但搜索后端要自己接。直
 - `smart-websearch`：搜索提供方。按查询是否含中文选择引擎链——
   - 中文：`cn.bing 直连 → 百度直连 → www.bing 代理 → DDG 代理`
   - 英文：`www.bing 代理 → DDG 代理 → 百度/cn.bing 兜底`
-- `smart-webfetch`：抓取提供方。按目标域名国内/海外决定直连或代理，失败兜底另一路。
+- `smart-webfetch`：抓取提供方。按目标域名国内/海外决定直连或代理，失败兜底另一路。**JS 空壳页自动走通用内嵌数据提取**（`lib/extract.js`，零依赖、确定性、无浏览器）：识别 Next.js App Router 的 `self.__next_f` flight 载荷、Pages Router 的 `__NEXT_DATA__`、JSON-LD、`<script type="application/json">`、`window.__INITIAL_STATE__` 等状态赋值，按块大小排序、预算内输出，并附上脚本里出现的 `/api/` 端点线索。提取在**完整 HTML**（字符截断之前）上进行，避免数据恰好落在截断点之后。
 
 **安装即自动接线（一键）**：插件的 bundle 补丁会自动把 `web.searchProvider` / `web.fetchProvider` 指向这两个提供方，无需手动改配置。
 
@@ -79,6 +80,8 @@ dsh plugin --profile desktop add "link:<path-to-dsh-smart-websearch>"
     fetchTimeoutMs: 8000
     fetchMaxBytes: 5000000
     fetchMaxChars: 100000
+    spaExtraction: true                 # JS 空壳页通用内嵌数据提取（Next.js/Nuxt/JSON-LD/状态）
+    spaMaxChars: 40000                  # 提取结果的输出预算（字符）
     cacheTtlMs: 300000                  # 搜索缓存 TTL；0=关闭
     cacheMaxEntries: 50
     searchHygiene: true                 # 重复搜索提醒
@@ -100,7 +103,7 @@ dsh plugin --profile desktop add "link:<path-to-dsh-smart-websearch>"
 
 ## 已知边界（如实说明）
 
-- **JS 重渲染页面**：抓取不做浏览器渲染，SPA 定价页等可能只拿到骨架（会附提示引导换源）。这是"无浏览器、保持轻量"的取舍。
+- **JS 重渲染页面**：抓取不做浏览器渲染。**数据内嵌在 HTML 里的 SPA（Next.js/Nuxt/状态注入，如 priceai.cc 这类比价站）现在会自动回收**；但数据完全靠加载后 XHR 拉取、HTML 里没有任何 JSON 的页面仍可能只拿到骨架——此时结果会附提示，引导换源或**临时写短脚本（如 Python + requests）直接打站点 JSON API**。这是"无浏览器、保持轻量"的取舍。
 - **海外搜索/抓取仍需代理**：国内搜索已完全免代理；海外内容直连不可达，需配置 `proxyUrl`。
 - **搜索卫生是"劝"不是"拦"**：对"模型铁了心要挖某个具体数字"的场景，软提醒作用有限。如需强制收敛，可自行扩展每轮搜索预算。
 - 个别查询返回 SEO 站是搜索引擎结果质量问题，非本插件故障。
@@ -117,6 +120,8 @@ node test/routing.mjs    # 语言分流验证
 
 ## 版本记录
 
+- **0.2.1**：SPA 提取加状态码门槛——仅对 `statusCode < 400` 的页面执行；404/403 的 Next.js 空壳只带站点通用 flight 数据，不再浪费输出预算（实测 artificialanalysis.ai 404 页发现）。空壳兜底通知不受影响。
+- **0.2.0**：新增通用 SPA 内嵌数据提取层 `lib/extract.js`（Next.js flight/`__NEXT_DATA__`、JSON-LD、`application/json` 脚本、`__INITIAL_STATE__`/`__NUXT__` 等状态赋值、`/api/` 端点线索），JS 空壳判定放宽到"可见文本 <3000 且含内嵌数据标记"，提取在完整 HTML 上进行；提取不到时提示临时脚本兜底。新增 `spaExtraction`/`spaMaxChars` 配置与 `test/extract.mjs`（含真实 priceai.cc 样本回归，可选）。
 - **0.1.1**：修复 `link:` 安装报 `Cannot find package 'undici'` 的问题——根因是 pnpm `link:` 不安装被链接包的 npm 依赖。移除 undici，直连改用 Node 内置 fetch，代理改用原生 CONNECT 隧道，插件从此零 npm 依赖；离线测试新增本地模拟代理用例。
 - **0.1.0**：首个版本（语言分流、多引擎 hedge、缓存、搜索卫生）。
 
