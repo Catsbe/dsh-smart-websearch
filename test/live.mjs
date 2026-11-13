@@ -1,5 +1,4 @@
 import { makeSearchProvider, makeFetchProvider, searchBing, searchDdgLite } from "../lib/engines.js";
-import { ProxyAgent } from "undici";
 
 const cfg = { bingMarket: "", perEngineTimeoutMs: 8000, searchBudgetMs: 12000, hedgeMs: 3000, fetchTimeoutMs: 8000, fetchMaxBytes: 5000000, fetchMaxChars: 100000 };
 const PROXY = "http://127.0.0.1:7897";
@@ -30,15 +29,14 @@ try {
 } catch (e) { console.log("\n[ddg-lite direct] ERROR:", e.message); }
 
 try {
-  const agent = new ProxyAgent(PROXY);
   const t0 = Date.now();
-  const s = await searchDdgLite("deepseek harness", 6, {}, undefined, cfg, agent);
+  const s = await searchDdgLite("deepseek harness", 6, {}, undefined, cfg, PROXY);
   show(`ddg-lite via PROXY ${Date.now() - t0}ms`, s);
 } catch (e) { console.log("\n[ddg-lite proxy] ERROR:", e.message); }
 
 // 3) Full search provider (hedged bing->ddg), both via proxy (real configured scenario)
 try {
-  const provider = makeSearchProvider({ cfg, engines: ["bing", "ddg-lite"], maxResults: 8, proxyAgent: new ProxyAgent(PROXY) });
+  const provider = makeSearchProvider({ cfg, engines: ["bing", "ddg-lite"], maxResults: 8, proxy: PROXY });
   for (const q of ["what is model context protocol", "postgresql 命令行 安装"]) {
     const t0 = Date.now();
     const r = await provider.search({ query: q, maxResults: 6 }, undefined);
@@ -48,7 +46,7 @@ try {
 
 // 4) Fetch provider (direct) on a stable page
 try {
-  const fp = makeFetchProvider({ cfg, proxyAgent: null });
+  const fp = makeFetchProvider({ cfg, proxy: null });
   const t0 = Date.now();
   const r = await fp.fetch({ url: "https://example.com/" }, undefined);
   console.log(`\n[fetch example.com ${Date.now() - t0}ms] status=${r.statusCode} kind=${r.body.kind} chars=${r.body.content.length} truncated=${r.truncated}`);

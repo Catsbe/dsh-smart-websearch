@@ -58,7 +58,7 @@ dsh plugin --profile desktop add "link:<path-to-dsh-smart-websearch>"
 
 > 想改用其它搜索提供方：在 profile 补丁里覆盖 `web` 行即可（profile 补丁优先于插件 bundle 补丁）。若仍装着 `dsh-free-search`，建议禁用以免混淆。
 
-> **依赖说明**：`undici` 为普通 npm 依赖；`link:` 安装时若报 `Cannot find package 'undici'`，在插件目录建目录联接指向 profile 已有的 undici 即可（`file:` 安装则由 pnpm 正常装依赖）。`@deepseek-ai/*` 由 Harness 运行时提供。
+> **零 npm 依赖**（v0.1.1 起）：直连用 Node ≥22.19 内置 `fetch`，代理用原生 `node:http` CONNECT 隧道 + `node:tls` 实现，不再依赖 `undici`——`link:` / `file:` 安装都不会再出现 `Cannot find package 'undici'`。`@deepseek-ai/*` 由 Harness 运行时提供。
 
 ## 配置项
 
@@ -107,13 +107,18 @@ dsh plugin --profile desktop add "link:<path-to-dsh-smart-websearch>"
 
 ## 开发与测试
 
-引擎层 `lib/engines.js` 仅依赖 `undici`，可独立测试：
+引擎层 `lib/engines.js` 零 npm 依赖（Node 内置模块），可独立测试：
 
 ```sh
-node test/run.mjs        # 离线逻辑测试（stub undici，无需联网）
+node test/run.mjs        # 离线逻辑测试（stub 内置 fetch + 本地模拟代理，无需联网）
 node test/live.mjs       # 真实引擎联网测试（需代理）
 node test/routing.mjs    # 语言分流验证
 ```
+
+## 版本记录
+
+- **0.1.1**：修复 `link:` 安装报 `Cannot find package 'undici'` 的问题——根因是 pnpm `link:` 不安装被链接包的 npm 依赖。移除 undici，直连改用 Node 内置 fetch，代理改用原生 CONNECT 隧道，插件从此零 npm 依赖；离线测试新增本地模拟代理用例。
+- **0.1.0**：首个版本（语言分流、多引擎 hedge、缓存、搜索卫生）。
 
 ## 许可
 

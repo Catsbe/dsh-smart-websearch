@@ -1,21 +1,18 @@
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
+import http from "node:http";
+import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// ── stub undici (controllable fetch) so the engine layer runs without network ──
-const nm = path.join(here, "node_modules", "undici");
-fs.mkdirSync(nm, { recursive: true });
-fs.writeFileSync(path.join(nm, "package.json"), JSON.stringify({ name: "undici", version: "0.0.0-test", type: "module", main: "index.js" }));
-fs.writeFileSync(path.join(nm, "index.js"), `let h = async () => { throw new Error("no handler"); };
-export function setHandler(fn){ h = fn; }
-export async function fetch(url, opts){ return h(url, opts); }
-export class ProxyAgent { constructor(u){ this.u = u; } }
-`);
+// ── stub the built-in fetch (controllable handler) so the engine layer runs without network ──
+let handler = async () => { throw new Error("no handler"); };
+globalThis.fetch = (url, opts) => handler(url, opts);
+const setHandler = (fn) => { handler = fn; };
+
 fs.copyFileSync(path.join(here, "..", "lib", "engines.js"), path.join(here, "_engines.mjs"));
-const { setHandler } = await import("./node_modules/undici/index.js");
 const { searchBing, searchDdgLite, makeSearchProvider, makeFetchProvider } = await import("./_engines.mjs");
 
 const cfg = { bingMarket: "", perEngineTimeoutMs: 8000, searchBudgetMs: 12000, hedgeMs: 50, fetchTimeoutMs: 8000, fetchMaxBytes: 5000000, fetchMaxChars: 100 };
@@ -67,23 +64,24 @@ console.log("T3 ddg-lite parsing");
   ok(s[0].title === "MCP Intro", "ddg title parsed");
 }
 
-// T4 hedge fallback: bing returns 0 -> ddg succeeds
+// T4 hedge fallback: bing returns 0 -> baidu succeeds (direct engines via stubbed fetch;
+// the native proxy path is covered offline by T7's local mock proxy).
 console.log("T4 hedged fallback");
 {
+  const baiduHtml = `<html><body><div class="result c-container new-pmd"><h3><a href="https://fallback.example">测试查询结果</a></h3><span class="content-right_2s-H4">works 测试查询</span></div></body></html>`;
   setHandler(async (url) => {
     if (String(url).includes("bing.com")) return htmlRes(bingHtml([])); // 0 results
-    return htmlRes(ddgHtml([["Fallback Result", "https://fallback.example", "works"]]));
+    return htmlRes(baiduHtml);
   });
-  // proxyAgent truthy so the overseas chain includes bing-www + ddg (ddg requires a proxy).
-  const provider = makeSearchProvider({ cfg, engines: ["bing", "ddg-lite"], maxResults: 8, proxyAgent: {} });
-  const r = await provider.search({ query: "something", maxResults: 5 }, undefined);
-  ok(r.sources.length === 1 && r.sources[0].url === "https://fallback.example", "fell back to ddg when bing empty");
+  const provider = makeSearchProvider({ cfg, engines: ["bing", "baidu"], maxResults: 8, proxy: null });
+  const r = await provider.search({ query: "测试查询", maxResults: 5 }, undefined);
+  ok(r.sources.length === 1 && r.sources[0].url === "https://fallback.example", "fell back to baidu when bing empty");
 }
 
 // T5 fetch provider: shape, char cap, binary reject
 console.log("T5 fetch provider");
 {
-  const fp = makeFetchProvider({ cfg, proxyAgent: null });
+  const fp = makeFetchProvider({ cfg, proxy: null });
   setHandler(async () => streamRes("<html>" + "x".repeat(500) + "</html>", "text/html"));
   const r = await fp.fetch({ url: "https://example.com/" }, undefined);
   ok(r.statusCode === 200 && r.body.kind === "html", "html kind + status");
@@ -101,11 +99,57 @@ console.log("T5 fetch provider");
 console.log("T6 search cache");
 {
   setHandler(async () => htmlRes(bingHtml([["Cache Test", "https://cache.example", "cached result about cache test"]])));
-  const provider = makeSearchProvider({ cfg: { ...cfg, cacheTtlMs: 300000 }, engines: ["bing"], maxResults: 8, proxyAgent: null });
+  const provider = makeSearchProvider({ cfg: { ...cfg, cacheTtlMs: 300000 }, engines: ["bing"], maxResults: 8, proxy: null });
   const r1 = await provider.search({ query: "cache test query", maxResults: 5 }, undefined);
   const r2 = await provider.search({ query: "cache test query", maxResults: 5 }, undefined);
   ok(r1.sources.length === 1, "first search returns result");
   ok(r2.cached === true, "second identical search hits cache");
+}
+
+// T7 native proxy plumbing (no undici): local mock proxy + origin, fully offline.
+// Covers the plain-HTTP absolute-form proxy path end-to-end and verifies the HTTPS
+// CONNECT tunnel sends the right authority (TLS itself needs a real endpoint).
+console.log("T7 native proxy plumbing");
+{
+  const origin = http.createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end("<html><body>proxied hello</body></html>");
+  });
+  await new Promise((r) => origin.listen(0, "127.0.0.1", r));
+  const originPort = origin.address().port;
+
+  let connectTarget = null;
+  const proxy = http.createServer((req, res) => {
+    // absolute-form request: http://127.0.0.1:<port>/page via proxy
+    const target = new URL(req.url);
+    const up = http.request({ host: target.hostname, port: target.port, path: target.pathname + target.search, method: req.method, headers: { ...req.headers, host: target.host } }, (ur) => {
+      res.writeHead(ur.statusCode ?? 502, ur.headers);
+      ur.pipe(res);
+    });
+    up.on("error", () => { res.writeHead(502); res.end(); });
+    req.pipe(up);
+  });
+  proxy.on("connect", (req, clientSocket) => {
+    connectTarget = req.url;
+    // Acknowledge the tunnel, then close: the client's TLS handshake will fail,
+    // which proves the CONNECT was issued with the correct host:port.
+    clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    clientSocket.end();
+  });
+  await new Promise((r) => proxy.listen(0, "127.0.0.1", r));
+  const proxyUrl = `http://127.0.0.1:${proxy.address().port}`;
+
+  const fp = makeFetchProvider({ cfg, proxy: proxyUrl });
+  const r = await fp.fetch({ url: `http://127.0.0.1:${originPort}/page` }, undefined);
+  ok(r.statusCode === 200 && r.body.content.includes("proxied hello"), "http fetch via native proxy (absolute-form)");
+
+  let connectFailed = false;
+  setHandler(async () => { throw new Error("direct path disabled in T7"); }); // force both paths to fail
+  try { await fp.fetch({ url: "https://example.com/" }, AbortSignal.timeout(4000)); } catch { connectFailed = true; }
+  ok(connectTarget === "example.com:443", "https CONNECT tunnel targets example.com:443");
+  ok(connectFailed, "tunnel close surfaces as fetch error (no silent success)");
+
+  origin.close(); proxy.close();
 }
 
 console.log(`\nALL ${passed} ASSERTIONS PASSED`);
