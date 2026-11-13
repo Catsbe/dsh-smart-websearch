@@ -1,11 +1,16 @@
-# dsh-smart-websearch bundle patch: load the package main entry as a host Cordis plugin.
-# It registers ctx.web search/fetch providers. To actually route the built-in
-# web_search / web_fetch tools through it, set in the profile cordis.patch.yml:
-#   - id: web
-#     config:
-#       searchProvider: smart-websearch
-#       fetchProvider: smart-webfetch
-# Defaults live in lib/index.js Config; override via the profile patch (id: dsh-smart-websearch).
+# dsh-smart-websearch bundle patch — ONE-CLICK.
+# Installing this bundle both loads the plugin AND auto-wires the built-in
+# web_search / web_fetch tools to it: web.searchProvider / web.fetchProvider are
+# pointed at the smart providers automatically, no manual config needed.
+#
+# To use a different provider instead, override the `web` row in your profile
+# cordis.patch.yml — the profile patch is applied after bundle patches and wins.
+# Plugin behavior defaults live in lib/index.js Config; override via the profile
+# patch row `id: dsh-smart-websearch`.
 - insert:
     - id: dsh-smart-websearch
       name: dsh-smart-websearch
+- id: web
+  config:
+    searchProvider: smart-websearch
+    fetchProvider: smart-webfetch

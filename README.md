@@ -36,9 +36,9 @@ DSH 自带 `web_search` / `web_fetch` 工具，但搜索后端要自己接。直
   - 英文：`www.bing 代理 → DDG 代理 → 百度/cn.bing 兜底`
 - `smart-webfetch`：抓取提供方。按目标域名国内/海外决定直连或代理，失败兜底另一路。
 
-在 profile 里把 `web.searchProvider` / `web.fetchProvider` 指向它们即可生效。
+**安装即自动接线（一键）**：插件的 bundle 补丁会自动把 `web.searchProvider` / `web.fetchProvider` 指向这两个提供方，无需手动改配置。
 
-## 安装
+## 安装（一键）
 
 需要 [`dsh` CLI](https://www.npmjs.com/package/@deepseek-ai/dsh)。克隆本仓库后：
 
@@ -46,22 +46,17 @@ DSH 自带 `web_search` / `web_fetch` 工具，但搜索后端要自己接。直
 dsh plugin --profile desktop add "link:<path-to-dsh-smart-websearch>"
 ```
 
-然后在 profile 的 `cordis.patch.yml` 里接线：
+装好即生效——自带 `web_search` / `web_fetch` 自动走本插件，**无需手动接线**。
+
+**唯一可选配置**：海外搜索/抓取需要代理（国内搜索免代理）。在 profile 的 `cordis.patch.yml` 里加：
 
 ```yaml
-# 1) 把自带 web 工具指向本插件
-- id: web
-  config:
-    searchProvider: smart-websearch
-    fetchProvider: smart-webfetch
-# 2) 配置（海外引擎/抓取需要代理；国内搜索免代理）
 - id: dsh-smart-websearch
   config:
-    proxyUrl: "http://127.0.0.1:7897"   # 你的代理端口，可留空
-# 3) 若装了 dsh-free-search，禁用以避免抢占
-- id: web-search-free
-  disabled: true
+    proxyUrl: "http://127.0.0.1:7897"   # 你的代理端口；不用海外可留空
 ```
+
+> 想改用其它搜索提供方：在 profile 补丁里覆盖 `web` 行即可（profile 补丁优先于插件 bundle 补丁）。若仍装着 `dsh-free-search`，建议禁用以免混淆。
 
 > **依赖说明**：`undici` 为普通 npm 依赖；`link:` 安装时若报 `Cannot find package 'undici'`，在插件目录建目录联接指向 profile 已有的 undici 即可（`file:` 安装则由 pnpm 正常装依赖）。`@deepseek-ai/*` 由 Harness 运行时提供。
 
