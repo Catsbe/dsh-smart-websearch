@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Smart web search",
+    "description": "Smart web_search and web_fetch providers: auto-detects local HTTP proxy ports (fallback 7890), language-aware CN-direct / overseas-proxy routing, hedged multi-engine fallback, detailed error diagnostics, boilerplate pruning, and SPA JSON recovery. Configuring a proxy port makes overseas search and fetching faster and more accurate."
+  }
+}

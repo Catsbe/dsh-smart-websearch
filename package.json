@@ -1,15 +1,22 @@
 {
   "name": "dsh-smart-websearch",
-  "version": "0.2.1",
-  "description": "Smart web search + fetch provider for DeepSeek Harness. Reuses the built-in web_search/web_fetch tools and makes them faster, more reliable, and less wasteful: language-aware routing (Chinese queries direct via cn.bing/Baidu, overseas via proxy), multi-engine hedged fallback, result caching, domestic-direct/overseas-proxy fetching, generic SPA embedded-data recovery (Next.js/Nuxt/JSON-LD, no browser), and search-hygiene nudges to curb redundant searches. An update-proof alternative to patching dsh-free-search.",
+  "version": "0.3.0",
+  "description": "Smart web search + fetch provider for DeepSeek Harness. Auto-detects local HTTP proxy ports (fallback 7890), routes CN direct / overseas via proxy, hedged multi-engine fallback, detailed error diagnostics, boilerplate pruning, SPA JSON recovery, and a Settings UI.",
   "type": "module",
   "main": "lib/index.js",
+  "icon": "icon.svg",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/",
+    "client/",
+    "locale/*.json",
+    "icon.svg",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
@@ -17,6 +24,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "engines": {
